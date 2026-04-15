@@ -1,0 +1,395 @@
+local addonName, addon = ...
+
+-- OFFENSIVE COOLDOWNS per class: { spellID, label, cooldownSec }
+-- Only major PvP burst windows. Spec-specific in OFFENSIVE_EXTRA.
+addon.OFFENSIVE_DATA = {
+    DEATHKNIGHT = {
+        { 47568,  "Empower Rune Weapon", 30 },
+    },
+    DEMONHUNTER = {
+        { 370965, "The Hunt",     90 },
+    },
+    DRUID = {
+        { 391528, "Convoke",      60 },
+    },
+    EVOKER = {
+        { 357210, "Deep Breath",  120 },
+    },
+    HUNTER = {},
+    MAGE = {},
+    MONK = {
+        { 322109, "Touch of Death", 180 },
+    },
+    PALADIN = {
+        { 31884,  "Avenging Wrath", 120 },
+        { 375576, "Divine Toll",    60 },
+    },
+    PRIEST = {
+        { 10060,  "Power Infusion", 120 },
+        { 375901, "Mindgames",      45 },
+        { 34433,  "Shadowfiend",   180 },
+    },
+    ROGUE = {
+        { 382245, "Cold Blood",    45 },
+    },
+    SHAMAN = {},
+    WARLOCK = {},
+    WARRIOR = {
+        { 107574, "Avatar",        90 },
+        { 376079, "Spear",         90 },
+        { 384318, "Thunderous Roar", 45 },
+    },
+}
+
+addon.OFFENSIVE_EXTRA = {
+    -- Death Knight
+    [251] = { -- Frost
+        { 51271,   "Pillar of Frost",   60 },
+        { 279302,  "Frostwyrm's Fury",  90 },
+    },
+    [252] = { -- Unholy
+        { 207289, "Unholy Assault",  90 },
+        { 275699, "Apocalypse",      30 },
+        { 49206,  "Summon Gargoyle", 180 },
+    },
+    -- Demon Hunter
+    [577] = { -- Havoc
+        { 191427, "Metamorphosis",  120 },
+        { 198013, "Eye Beam",        40 },
+        { 258860, "Essence Break",   40 },
+    },
+    -- Druid
+    [102] = { -- Balance
+        { 194223, "Celestial Alignment", 90 },
+    },
+    [103] = { -- Feral
+        { 106951, "Berserk",        180 },
+        { 274837, "Feral Frenzy",    45 },
+        { 5217,   "Tiger's Fury",    30 },
+    },
+    -- Evoker
+    [1467] = { -- Devastation
+        { 375087, "Dragonrage",  120 },
+    },
+    -- Hunter
+    [253] = { -- Beast Mastery
+        { 19574,  "Bestial Wrath",  90 },
+        { 359844, "Call of the Wild", 120 },
+    },
+    [254] = { -- Marksmanship
+        { 288613, "Trueshot",   60 },
+    },
+    [255] = { -- Survival
+        { 360952, "Coordinated Assault", 60 },
+        { 360966, "Spearhead",           60 },
+    },
+    -- Mage
+    [62] = { -- Arcane
+        { 365350, "Arcane Surge", 90 },
+    },
+    [63] = { -- Fire
+        { 190319, "Combustion",  120 },
+    },
+    [64] = { -- Frost
+        { 12472,  "Icy Veins",  120 },
+    },
+    -- Monk
+    [269] = { -- Windwalker
+        { 137639, "Storm, Earth, and Fire", 90 },
+        { 123904, "Invoke Xuen",            90 },
+    },
+    -- Paladin
+    [70] = { -- Retribution
+        { 343721, "Final Reckoning",   54 },
+        { 255937, "Wake of Ashes",     30 },
+    },
+    -- Priest
+    [258] = { -- Shadow
+        { 391109, "Dark Ascension", 60 },
+        { 228260, "Void Eruption",  120 },
+        { 263165, "Void Torrent",    30 },
+    },
+    -- Rogue
+    [259] = { -- Assassination
+        { 360194, "Deathmark",  120 },
+        { 385627, "Kingsbane",   60 },
+    },
+    [260] = { -- Outlaw
+        { 13750,  "Adrenaline Rush", 180 },
+        { 51690,  "Killing Spree",   180 },
+    },
+    [261] = { -- Subtlety
+        { 185313, "Shadow Dance",  50 },
+        { 121471, "Shadow Blades", 90 },
+        { 384631, "Flagellation",  90 },
+    },
+    -- Shaman
+    [262] = { -- Elemental
+        { 114050, "Ascendance",   180 },
+        { 191634, "Stormkeeper",   60 },
+    },
+    [263] = { -- Enhancement
+        { 114051, "Ascendance",   120 },
+        { 51533,  "Feral Spirit",  90 },
+        { 384352, "Doom Winds",    60 },
+    },
+    -- Warlock
+    [265] = { -- Affliction
+        { 442726, "Malevolence",      60 },
+        { 205180, "Summon Darkglare", 120 },
+        { 386997, "Soul Rot",         60 },
+    },
+    [266] = { -- Demonology
+        { 265187, "Summon Demonic Tyrant", 60 },
+    },
+    [267] = { -- Destruction
+        { 442726, "Malevolence",      60 },
+        { 1122,   "Summon Infernal",  120 },
+    },
+    -- Warrior
+    [71] = { -- Arms
+        { 227847, "Bladestorm",    60 },
+        { 262161, "Warbreaker",    45 },
+    },
+    [72] = { -- Fury
+        { 1719,   "Recklessness",  90 },
+        { 227847, "Bladestorm",    60 },
+        { 385059, "Odyn's Fury",   45 },
+    },
+}
+
+-- DEFENSIVE COOLDOWNS per class
+addon.DEFENSIVE_DATA = {
+    DEATHKNIGHT = {
+        { 48707,  "Anti-Magic Shell",  40 },
+        { 48792,  "Icebound Fortitude", 120 },
+        { 49039,  "Lichborne",        120 },
+        { 51052,  "Anti-Magic Zone",  180 },
+    },
+    DEMONHUNTER = {
+        { 196718, "Darkness",     180 },
+        { 196555, "Netherwalk",   180 },
+    },
+    DRUID = {
+        { 22812,  "Barkskin",    60 },
+    },
+    EVOKER = {
+        { 363916, "Obsidian Scales", 90 },
+        { 374227, "Zephyr",         120 },
+        { 374348, "Renewing Blaze",  90 },
+    },
+    HUNTER = {
+        { 186265, "Aspect of the Turtle", 150 },
+        { 109304, "Exhilaration",         120 },
+        { 264735, "Survival of the Fittest", 90 },
+    },
+    MAGE = {
+        { 45438,  "Ice Block",          180 },
+        { 342245, "Alter Time",          50 },
+        { 110959, "Greater Invisibility", 120 },
+    },
+    MONK = {
+        { 115203, "Fortifying Brew",   90 },
+        { 122783, "Diffuse Magic",     90 },
+    },
+    PALADIN = {
+        { 642,    "Divine Shield",       210 },
+        { 1022,   "Blessing of Protection", 240 },
+        { 633,    "Lay on Hands",        420 },
+        { 6940,   "Blessing of Sacrifice", 60 },
+    },
+    PRIEST = {
+        { 19236,  "Desperate Prayer",  70 },
+        { 586,    "Fade",              20 },
+    },
+    ROGUE = {
+        { 31224,  "Cloak of Shadows", 120 },
+        { 5277,   "Evasion",          120 },
+        { 1856,   "Vanish",           120 },
+    },
+    SHAMAN = {
+        { 108271, "Astral Shift",    90 },
+        { 204336, "Grounding Totem", 24 },
+    },
+    WARLOCK = {
+        { 104773, "Unending Resolve", 180 },
+        { 108416, "Dark Pact",         45 },
+    },
+    WARRIOR = {
+        { 97462,  "Rallying Cry",      180 },
+        { 23920,  "Spell Reflection",   24 },
+    },
+}
+
+addon.DEFENSIVE_EXTRA = {
+    -- Demon Hunter
+    [577] = { -- Havoc
+        { 198589, "Blur", 60 },
+    },
+    -- Druid
+    [103] = { -- Feral
+        { 61336,  "Survival Instincts", 180 },
+    },
+    [104] = { -- Guardian
+        { 61336,  "Survival Instincts", 120 },
+    },
+    [105] = { -- Restoration
+        { 102342, "Ironbark", 90 },
+    },
+    -- Monk
+    [269] = { -- Windwalker
+        { 122470, "Touch of Karma", 90 },
+    },
+    [270] = { -- Mistweaver
+        { 116849, "Life Cocoon", 75 },
+    },
+    -- Paladin
+    [70] = { -- Retribution
+        { 184662, "Shield of Vengeance", 63 },
+    },
+    [66] = { -- Protection
+        { 31850,  "Ardent Defender",         84 },
+        { 86659,  "Guardian of Ancient Kings", 300 },
+    },
+    -- Priest
+    [258] = { -- Shadow
+        { 47585,  "Dispersion", 90 },
+    },
+    [256] = { -- Discipline
+        { 33206,  "Pain Suppression", 180 },
+    },
+    [257] = { -- Holy
+        { 47788,  "Guardian Spirit", 180 },
+    },
+    -- Rogue
+    [259] = { -- Assassination
+        { 212182, "Smoke Bomb", 180 },
+    },
+    [261] = { -- Subtlety
+        { 359053, "Smoke Bomb", 120 },
+    },
+    -- Shaman
+    [264] = { -- Restoration
+        { 98008,  "Spirit Link Totem",  174 },
+        { 108280, "Healing Tide Totem", 129 },
+    },
+    -- Warrior
+    [71] = { -- Arms
+        { 118038, "Die by the Sword", 85 },
+    },
+    [72] = { -- Fury
+        { 184364, "Enraged Regeneration", 114 },
+    },
+    [73] = { -- Protection
+        { 871,    "Shield Wall", 120 },
+        { 12975,  "Last Stand",  180 },
+    },
+}
+
+-- IMMUNITIES per class: { spellID, label, cooldownSec, immuneType, description }
+-- immuneType: what it grants immunity to
+addon.IMMUNITY_DATA = {
+    DEATHKNIGHT = {
+        { 48707,  "Anti-Magic Shell", 40,  "Magic Dmg + Debuffs", "Absorbs magic damage and immune to magic debuff applications for 5s" },
+        { 48792,  "Icebound Fortitude", 120, "Stun Immune", "Immune to stuns, -30% damage taken for 8s" },
+        { 49039,  "Lichborne", 120, "Charm/Fear/Sleep", "Immune to Charm, Fear, and Sleep effects for 10s" },
+        { 212552, "Wraith Walk", 60, "Root Immune", "Removes and immune to roots, +70% speed for 4s" },
+    },
+    DEMONHUNTER = {
+        { 196555, "Netherwalk", 180, "All Damage", "Immune to ALL damage and effects, +100% speed, cannot attack for 6s" },
+        { 206803, "Rain from Above", 90, "Untargetable", "Launch into air, briefly untargetable from ground" },
+    },
+    DRUID = {
+        -- Shapeshift root break is passive, not trackable
+    },
+    EVOKER = {
+        { 378441, "Time Stop", 45, "Everything (Ally)", "Places ally in stasis — invulnerable, cannot act for 5s" },
+        { 378444, "Obsidian Mettle", 0, "Interrupt/Silence", "While Obsidian Scales active, immune to interrupt, silence, pushback" },
+    },
+    HUNTER = {
+        { 186265, "Aspect of the Turtle", 150, "All Damage", "Immune to ALL damage, deflects attacks/spells, cannot attack for 8s" },
+        { 5384,   "Feign Death", 30, "Drops Target", "Feign death — drops target, enemies stop attacking" },
+    },
+    MAGE = {
+        { 45438,  "Ice Block", 180, "Everything", "Immune to ALL damage/effects, cannot act for 10s. Dispellable by Mass Dispel/Shattering Throw" },
+        { 414658, "Ice Cold", 240, "70% DR + Act", "70% damage reduction for 6s, CAN still move and cast. NOT true immunity" },
+        { 110959, "Greater Invisibility", 120, "Untargetable", "Invisible/untargetable for 20s, 60% DR while invisible and 3s after" },
+    },
+    MONK = {
+        { 122783, "Diffuse Magic", 90, "Magic 60%", "Reduces magic damage by 60% for 6s, transfers magic debuffs back to casters" },
+    },
+    PALADIN = {
+        { 642,    "Divine Shield", 210, "Everything", "Immune to ALL damage/effects, CAN attack/heal for 8s. Shattering Throw/Mass Dispel removes" },
+        { 1022,   "Blessing of Protection", 240, "Physical", "Target immune to physical damage/effects, cannot auto-attack. Dispellable" },
+        { 204018, "Blessing of Spellwarding", 240, "Magic", "Target immune to magic damage/effects for 10s — replaces BoP if talented" },
+        { 1044,   "Blessing of Freedom", 25, "Movement Impair", "Target immune to movement impairing effects for 8s" },
+    },
+    PRIEST = {
+        { 47585,  "Dispersion", 90, "Silence/Int + 75% DR", "75-90% damage reduction, immune to silence/interrupt, cannot attack for 6s" },
+        { 408557, "Phase Shift", 30, "All (1 sec)", "Fade upgrade — avoid ALL attacks and spells for 1s (PvP talent)" },
+        { 213610, "Holy Ward", 45, "Next CC", "Wards target against the NEXT full loss of control effect (PvP talent)" },
+    },
+    ROGUE = {
+        { 31224,  "Cloak of Shadows", 120, "Magic Spells", "Removes magic debuffs, immune to magic spells for 5s" },
+        { 5277,   "Evasion", 120, "Physical (Dodge)", "Near 100% dodge chance — immune to melee/ranged physical for 10s" },
+        { 1856,   "Vanish", 120, "Untargetable", "Enter stealth, drops target — untargetable until broken" },
+    },
+    SHAMAN = {
+        { 409293, "Burrow", 120, "Everything", "Burrow underground — unattackable, removes snares, +50% speed for 5s" },
+        { 204336, "Grounding Totem", 24, "Next Spell (Party)", "Redirects next harmful spell to the totem — party spell immunity" },
+    },
+    WARLOCK = {
+        { 104773, "Unending Resolve", 180, "Silence/Int + 25% DR", "Immune to interrupt/silence/pushback, -25% damage for 8s" },
+        { 212295, "Nether Ward", 45, "Spell Reflect", "Reflects harmful spells for 3s, also prevents interrupts (PvP)" },
+    },
+    WARRIOR = {
+        { 23920,  "Spell Reflection", 24, "Next Spell", "Reflects the next spell cast on you back to the caster" },
+        { 46924,  "Bladestorm", 60, "CC Immune", "Immune to ALL crowd control while Bladestorming" },
+    },
+}
+
+addon.IMMUNITY_EXTRA = {
+    -- Demon Hunter
+    [577] = { -- Havoc
+        { 198589, "Blur", 60, "Dodge + 25% DR", "50% dodge, -25% damage for 10s. In PvP dodges spells/ranged for 3s" },
+    },
+    -- Druid
+    [103] = { -- Feral
+        { 61336,  "Survival Instincts", 180, "All Damage (50%)", "Reduces all damage taken by 50% for 6s" },
+    },
+    [104] = { -- Guardian
+        { 61336,  "Survival Instincts", 120, "All Damage (50%)", "Reduces all damage taken by 50% for 6s" },
+    },
+    -- Monk
+    [269] = { -- Windwalker
+        { 122470, "Touch of Karma", 90, "Absorb + Redirect", "Absorbs ALL damage for 10s (80% HP cap), redirects 70% to attacker" },
+    },
+    [270] = { -- Mistweaver
+        { 116849, "Life Cocoon", 75, "Absorb Shield", "Massive absorb shield on target, increases healing received by 50%" },
+    },
+    -- Paladin
+    [65] = { -- Holy
+        { 498,    "Divine Protection", 42, "Magic (50%)", "Reduces magic damage taken by 50% for 8s" },
+    },
+    -- Priest
+    [257] = { -- Holy
+        { 47788,  "Guardian Spirit", 180, "Prevent Death", "Prevents target from dying — heals to 40% instead of lethal damage" },
+    },
+    [256] = { -- Discipline
+        { 33206,  "Pain Suppression", 180, "40% DR (External)", "Reduces target's damage taken by 40% for 8s" },
+    },
+    -- Rogue
+    [259] = { -- Assassination
+        { 212182, "Smoke Bomb", 180, "Zone Untargetable", "Zone where enemies outside cannot target players inside for 5s" },
+    },
+    [261] = { -- Subtlety
+        { 359053, "Smoke Bomb", 120, "Zone Untargetable", "Zone where enemies outside cannot target players inside for 5s" },
+    },
+    -- Warrior
+    [71] = { -- Arms
+        { 118038, "Die by the Sword", 85, "Parry + 30% DR", "Near 100% parry chance, -30% damage taken for 8s" },
+    },
+    [72] = { -- Fury
+        { 184364, "Enraged Regeneration", 114, "30% DR + Heal", "Reduces damage taken by 30% and heals over 8s" },
+    },
+}
