@@ -1,8 +1,8 @@
 ## Interface: 120001
 ## Title: |cFF00FF00GladPush|r Arena Guide
-## Notes: Arena CC, offensive, and defensive cooldown guide | gladpush.gg
+## Notes: Arena CC, offensive, defensive, immunity & PvP talent guide | gladpush.gg
 ## Author: Skitstep
-## Version: 2.0
+## Version: 2.2
 ## SavedVariables: GladPushCCDB
 
 data.lua

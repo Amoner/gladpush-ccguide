@@ -17,7 +17,7 @@ local userHidden = false
 local isPreviewMode = false
 local previewTeam = {}
 local previewOpponents = {}
-local activeTab = "cc" -- "cc", "offensive", "defensive", "immunity"
+local activeTab = "cc" -- "cc", "offensive", "defensive", "immunity", "pvptalent"
 
 -------------------------------------------------------------------
 -- Helpers
@@ -68,17 +68,29 @@ local function GetMergedCC(specID, cls)
             if SpellExists(cc[1]) then r[#r+1] = cc end
         end
     end
+    -- PvP talent CC
+    for _, cc in ipairs(addon.PVP_CC_DATA and addon.PVP_CC_DATA[cls] or {}) do
+        if SpellExists(cc[1]) then r[#r+1] = cc end
+    end
+    if specID and addon.PVP_CC_EXTRA and addon.PVP_CC_EXTRA[specID] then
+        for _, cc in ipairs(addon.PVP_CC_EXTRA[specID]) do
+            if SpellExists(cc[1]) then r[#r+1] = cc end
+        end
+    end
     return r
 end
 
 local function GetMergedCooldowns(specID, cls, cdType)
-    local baseData, extraData
+    local baseData, extraData, pvpBase, pvpExtra
     if cdType == "offensive" then
         baseData = addon.OFFENSIVE_DATA; extraData = addon.OFFENSIVE_EXTRA
+        pvpBase = addon.PVP_OFFENSIVE_DATA; pvpExtra = addon.PVP_OFFENSIVE_EXTRA
     elseif cdType == "defensive" then
         baseData = addon.DEFENSIVE_DATA; extraData = addon.DEFENSIVE_EXTRA
+        pvpBase = addon.PVP_DEFENSIVE_DATA; pvpExtra = addon.PVP_DEFENSIVE_EXTRA
     elseif cdType == "immunity" then
         baseData = addon.IMMUNITY_DATA; extraData = addon.IMMUNITY_EXTRA
+        pvpBase = addon.PVP_IMMUNITY_DATA; pvpExtra = addon.PVP_IMMUNITY_EXTRA
     end
     local r = {}
     for _, cd in ipairs(baseData and baseData[cls] or {}) do
@@ -89,6 +101,33 @@ local function GetMergedCooldowns(specID, cls, cdType)
             if SpellExists(cd[1]) then r[#r+1] = cd end
         end
     end
+    -- PvP talent cooldowns
+    for _, cd in ipairs(pvpBase and pvpBase[cls] or {}) do
+        if SpellExists(cd[1]) then r[#r+1] = cd end
+    end
+    if specID and pvpExtra and pvpExtra[specID] then
+        for _, cd in ipairs(pvpExtra[specID]) do
+            if SpellExists(cd[1]) then r[#r+1] = cd end
+        end
+    end
+    return r
+end
+
+local function GetMergedPvPTalents(specID, cls)
+    local r = { cc={}, offensive={}, defensive={}, immunity={} }
+    local function merge(tbl, dest)
+        for _, e in ipairs(tbl or {}) do
+            if SpellExists(e[1]) then dest[#dest+1] = e end
+        end
+    end
+    merge(addon.PVP_CC_DATA and addon.PVP_CC_DATA[cls], r.cc)
+    if specID and addon.PVP_CC_EXTRA then merge(addon.PVP_CC_EXTRA[specID], r.cc) end
+    merge(addon.PVP_OFFENSIVE_DATA and addon.PVP_OFFENSIVE_DATA[cls], r.offensive)
+    if specID and addon.PVP_OFFENSIVE_EXTRA then merge(addon.PVP_OFFENSIVE_EXTRA[specID], r.offensive) end
+    merge(addon.PVP_DEFENSIVE_DATA and addon.PVP_DEFENSIVE_DATA[cls], r.defensive)
+    if specID and addon.PVP_DEFENSIVE_EXTRA then merge(addon.PVP_DEFENSIVE_EXTRA[specID], r.defensive) end
+    merge(addon.PVP_IMMUNITY_DATA and addon.PVP_IMMUNITY_DATA[cls], r.immunity)
+    if specID and addon.PVP_IMMUNITY_EXTRA then merge(addon.PVP_IMMUNITY_EXTRA[specID], r.immunity) end
     return r
 end
 
@@ -147,6 +186,7 @@ local tabDefs = {
     { key = "offensive", label = "Offensives" },
     { key = "defensive", label = "Defensives" },
     { key = "immunity",  label = "Immunities" },
+    { key = "pvptalent", label = "PvP Talents" },
 }
 for i, def in ipairs(tabDefs) do
     local tb = CreateFrame("Frame", nil, frame, "BackdropTemplate")
@@ -216,7 +256,13 @@ local function AcquireLabel()
         l:SetJustifyH("LEFT")
     end
     l:ClearAllPoints(); l:SetTextColor(1,1,1,1)
-    if GameFontNormalSmall then l:SetFontObject(GameFontNormalSmall) end
+    -- Pool may contain labels previously resized to 7pt for CC micro-labels;
+    -- SetFontObject alone doesn't always override a prior SetFont, so re-apply explicitly.
+    if GameFontNormalSmall then
+        l:SetFontObject(GameFontNormalSmall)
+        local fp, fs, ff = GameFontNormalSmall:GetFont()
+        if fp then l:SetFont(fp, fs, ff or "") end
+    end
     l:SetJustifyH("LEFT"); l:Show()
     active.label[#active.label+1] = l; return l
 end
@@ -305,21 +351,62 @@ end
 -- player = { specID (or nil), classToken, name (or nil) }
 -- colX = left edge of this column, colW = column width
 -------------------------------------------------------------------
-local function AddPlayerBlock(player, startY, colX, colW)
+local function AddPlayerBlock(player, startY, colX, colW, topTargetSpecID)
     local specID, cls, name = player[1], player[2], player[3]
 
     -- Get data based on active tab
-    local items
+    local items, pvpTalents
     if activeTab == "cc" then
         items = GetMergedCC(specID, cls)
+    elseif activeTab == "pvptalent" then
+        pvpTalents = GetMergedPvPTalents(specID, cls)
+        local total = #pvpTalents.cc + #pvpTalents.offensive + #pvpTalents.defensive + #pvpTalents.immunity
+        if total == 0 then return startY end
     else
         items = GetMergedCooldowns(specID, cls, activeTab)
     end
-    if #items == 0 then return startY end
+    if not pvpTalents and #items == 0 then return startY end
 
     -- For CC tab: group by DR type. For cooldown tabs: show flat list.
     local rows = {}
-    if activeTab == "cc" then
+    if activeTab == "pvptalent" then
+        -- PvP Talents tab: combine all PvP talents with sub-category headers
+        local cats = {
+            { key="cc",        label="|cFFFFCC00CC|r",          items=pvpTalents.cc },
+            { key="offensive", label="|cFF00FF00Offensives|r",  items=pvpTalents.offensive },
+            { key="defensive", label="|cFF4488FFDefensives|r",  items=pvpTalents.defensive },
+            { key="immunity",  label="|cFFFF4040Immunities|r",  items=pvpTalents.immunity },
+        }
+        for _, cat in ipairs(cats) do
+            if #cat.items > 0 then
+                rows[#rows+1] = { isSubHeader = true, text = cat.label }
+                if cat.key == "cc" then
+                    -- Group PvP CC by DR type
+                    local byType, typeOrder, typeSeen = {}, {}, {}
+                    for _, cc in ipairs(cat.items) do
+                        local t = cc[2]
+                        if not typeSeen[t] then typeSeen[t]=true; typeOrder[#typeOrder+1]=t end
+                        if not byType[t] then byType[t]={} end
+                        byType[t][#byType[t]+1] = cc
+                    end
+                    local ord = {}
+                    for i,t in ipairs(addon.CC_ORDER) do ord[t]=i end
+                    table.sort(typeOrder, function(a,b) return (ord[a] or 99) < (ord[b] or 99) end)
+                    for _, t in ipairs(typeOrder) do
+                        rows[#rows+1] = { label = t, icon = addon.CC_TYPE_ICONS[t], spells = byType[t], isCC = true }
+                    end
+                elseif cat.key == "immunity" then
+                    for _, cd in ipairs(cat.items) do
+                        rows[#rows+1] = { spellID = cd[1], label = cd[2], cooldown = cd[3], immuneType = cd[4], description = cd[5], isImmunity = true }
+                    end
+                else
+                    for _, cd in ipairs(cat.items) do
+                        rows[#rows+1] = { spellID = cd[1], label = cd[2], cooldown = cd[3] }
+                    end
+                end
+            end
+        end
+    elseif activeTab == "cc" then
         local byType, typeOrder, typeSeen = {}, {}, {}
         for _, cc in ipairs(items) do
             local t = cc[2]
@@ -373,14 +460,39 @@ local function AddPlayerBlock(player, startY, colX, colW)
         GameTooltip:Show()
     end)
 
+    local killPct = specID and addon.KILL_TARGET_PCT and addon.KILL_TARGET_PCT[specID]
+    local killIndicator = ""
+    if killPct then
+        if specID == topTargetSpecID then
+            killIndicator = string.format(
+                " |TInterface\\TargetingFrame\\UI-RaidTargetingIcon_8:12|t|cFFFF4040%.1f%%|r",
+                killPct)
+        else
+            killIndicator = string.format(" |cFF888888%.1f%%|r", killPct)
+        end
+    end
+
     local nl = AcquireLabel()
     nl:SetPoint("LEFT", hi, "RIGHT", 6, 0)
-    nl:SetText("|c" .. hex .. displayName .. "|r")
+    nl:SetText("|c" .. hex .. displayName .. "|r" .. killIndicator)
 
     startY = startY - (HEADER_SIZE + 4)
 
     local rowIdx = 0
     for _, row in ipairs(rows) do
+        if row.isSubHeader then
+            -- Sub-category header for PvP Talents tab
+            startY = startY - 2
+            local subBG = AcquireBG()
+            subBG:SetPoint("TOPLEFT", frame, "TOPLEFT", colX, startY + 1)
+            subBG:SetSize(colW, 14)
+            subBG:SetColorTexture(0.15, 0.15, 0.2, 0.5)
+            local subHdr = AcquireLabel()
+            subHdr:SetPoint("TOPLEFT", frame, "TOPLEFT", colX + 4, startY - 1)
+            subHdr:SetText(row.text)
+            startY = startY - 14
+        else
+
         local thisRowH = (row.isCC) and (SPELL_SIZE + 14) or ROW_HEIGHT
         local rowBG = AcquireBG()
         rowBG:SetPoint("TOPLEFT", frame, "TOPLEFT", colX, startY + 1)
@@ -438,7 +550,7 @@ local function AddPlayerBlock(player, startY, colX, colW)
                 GameTooltip:AddLine(" ")
                 GameTooltip:AddDoubleLine("Immune to:", row.immuneType or "?", 0.6,0.6,0.6, 1,0.4,0.4)
                 GameTooltip:AddLine(row.description or "", 1, 0.82, 0, true)
-                GameTooltip:AddDoubleLine("Cooldown:", row.cooldown .. "s", 0.6,0.6,0.6, 1,1,1)
+                GameTooltip:AddDoubleLine("Cooldown:", row.cooldown > 0 and (row.cooldown .. "s") or "passive", 0.6,0.6,0.6, 1,1,1)
                 GameTooltip:Show()
             end)
 
@@ -469,10 +581,12 @@ local function AddPlayerBlock(player, startY, colX, colW)
             cdTime:SetPoint("RIGHT", frame, "TOPLEFT", colX + colW - 4, startY - SPELL_SIZE/2)
             cdTime:SetJustifyH("RIGHT")
             cdTime:SetTextColor(0.55,0.55,0.55)
-            cdTime:SetText(row.cooldown .. "s")
+            cdTime:SetText(row.cooldown > 0 and (row.cooldown .. "s") or "passive")
         end
         local thisRowH = (row.isCC) and (SPELL_SIZE + 14) or ROW_HEIGHT
         startY = startY - thisRowH
+
+        end -- close else (non-subheader rows)
     end
     return startY - 2
 end
@@ -496,8 +610,20 @@ local function BuildTeamColumn(players, startY, colX, colW, title, isOpponent)
     end
     startY = startY - 16
 
+    local topTargetSpecID, topTargetPct = nil, -1
+    if addon.KILL_TARGET_PCT then
+        for _, player in ipairs(players) do
+            local sid = player[1]
+            local pct = sid and addon.KILL_TARGET_PCT[sid]
+            if pct and pct > topTargetPct then
+                topTargetPct = pct
+                topTargetSpecID = sid
+            end
+        end
+    end
+
     for _, player in ipairs(players) do
-        startY = AddPlayerBlock(player, startY, colX, colW)
+        startY = AddPlayerBlock(player, startY, colX, colW, topTargetSpecID)
     end
     return startY - 2
 end
